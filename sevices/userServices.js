@@ -5,6 +5,8 @@ var ObjectId = require('mongodb').ObjectId;
 var bcrypt = require('bcryptjs');
 var jwt = require('jsonwebtoken');
 var nodemailer = require('nodemailer');
+var express = require('express');
+var app = express();
 
 
 const userSignup = async (req, res) => {
@@ -75,6 +77,7 @@ const userLogin = async (req, res) => {
 
             if (result.length) {
                 let passwordIsValid = bcrypt.compareSync(req.body.password, result[0].password);
+
                 if (!passwordIsValid) return res.status(401).send({
                     auth: false,
                     token: null
@@ -124,7 +127,7 @@ const getContacts = async (req, res) => {
         }
 
         // retrieving all tasks' data from database
-        let result = await dba.collection(config.userCollection).find().toArray();
+        let result = await dba.collection(config.userCollection).find(query).project({password: 0}).toArray();
         if (result.length) {
             sendEmail("Fetched all/specific contact from database")
             res.status(200).send({
@@ -151,7 +154,7 @@ const updateContacts = async (req, res) => {
         let dba = db.db(config.ambition_db);
 
         // request body
-        
+
         let contactId = req.body.contactId;
         let updatedData = req.body;
         delete updatedData["contactId"];
@@ -164,7 +167,7 @@ const updateContacts = async (req, res) => {
                 $set: updatedData
             });
             if (result.modifiedCount) {
-                sendEmail("Data updated by the user for user ID -> "+ contactId)
+                sendEmail("Data updated by the user for user ID -> " + contactId)
                 res.status(200).send(response.successful_update);
             } else {
                 res.status(400).send(response.no_data_found);
@@ -201,7 +204,7 @@ const createContacts = async (req, res) => {
         }
         var result = await dba.collection(config.userCollection).insertOne(data_obj);
         if (result.insertedCount) {
-            sendEmail("New contact created by the user having email "+email)
+            sendEmail("New contact created by the user having email " + email)
             res.status(200).send(response.successful_insert)
         } else {
             res.status(400).send(response.failed_to_insert)
@@ -233,7 +236,7 @@ const deleteContacts = async (req, res) => {
                 _id: ObjectId(contactId)
             });
             if (result.deletedCount) {
-                sendEmail("Deleted user having ID -> "+contactId);
+                sendEmail("Deleted user having ID -> " + contactId);
                 res.status(200).send(response.successful_delete);
             } else {
                 res.status(400).send(response.no_data_found);
@@ -251,18 +254,26 @@ const deleteContacts = async (req, res) => {
 
 module.exports.deleteContacts = deleteContacts;
 
-const forgotPassword = async(req, res) =>{
+const forgotPassword = async (req, res) => {
     try {
         let email = req.body.email;
         const db = req.app.locals.db;
         let dba = db.db(config.ambition_db);
-        
-        let result = await dba.collection(config.userCollection).find({email: email}).toArray();
-        if(result.length){
-            let otp = Math.floor(Math.random() * 4);
-            let otpsuccess = await dba.collection(config.userCollection).updateOne({email: email}, {$set: {otp: otp}});
-            if(otpsuccess.modifiedCount){
-                sendEmail("Here is your one time password -> "+otp);
+
+        let result = await dba.collection(config.userCollection).find({
+            email: email
+        }).toArray();
+        if (result.length) {
+            let otp = Math.floor(1000 + Math.random() * 9000);
+            let otpsuccess = await dba.collection(config.userCollection).updateOne({
+                email: email
+            }, {
+                $set: {
+                    otp: otp
+                }
+            });
+            if (otpsuccess.modifiedCount) {
+                sendEmail("Here is your one time password -> " + otp);
                 res.send(200)
             } else {
                 res.send(400)
@@ -280,7 +291,7 @@ const forgotPassword = async(req, res) =>{
 module.exports.forgotPassword = forgotPassword;
 
 
-const verifyOtp = async(req, res) => {
+const verifyOtp = async (req, res) => {
     try {
         let otp = req.body.otp;
         let email = req.body.email;
@@ -288,9 +299,12 @@ const verifyOtp = async(req, res) => {
         const db = req.app.locals.db;
         let dba = db.db(config.ambition_db);
 
-        if(otp && email){
-            let result = await dba.collection(config.userCollection).find({email: email, otp: otp}).toArray();
-            if(result.length){
+        if (otp && email) {
+            let result = await dba.collection(config.userCollection).find({
+                email: email,
+                otp: otp
+            }).toArray();
+            if (result.length) {
                 res.send(200)
             } else {
                 res.send(400)
@@ -319,7 +333,7 @@ function sendEmail(text) {
 
     var mailOptions = {
         from: 'youremail@gmail.com',
-        to: req.app.locals.email,
+        to: app.locals.email,
         subject: 'Operations performed by User',
         text: text
     };
